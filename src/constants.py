@@ -14,3 +14,8 @@ EXPECTED_STATUS = {
     'W': ('Withdrawn',),
     '': ('Draft', 'Active'),
 }
+OUTPUT_PRETTY = 'pretty'
+OUTPUT_FILE = 'file'
+OUTPUT_CHOICES = (OUTPUT_PRETTY, OUTPUT_FILE)
+
+OUTPUT_HELP = 'Дополнительные способы вывода данных'
