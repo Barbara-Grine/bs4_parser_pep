@@ -4,7 +4,8 @@ from datetime import datetime
 
 from prettytable import PrettyTable
 
-from constants import BASE_DIR, DATETIME_FORMAT, RESULTS_DIR
+from constants import (BASE_DIR, DATETIME_FORMAT, OUTPUT_FILE, OUTPUT_PRETTY,
+                       RESULTS_DIR)
 
 OUTPUT_SAVED = "Файл с результатами был сохранён: {file_path}"
 
@@ -25,24 +26,21 @@ def pretty_output(results, **kwargs):
 def file_output(results, cli_args, **kwargs):
     results_dir = BASE_DIR / RESULTS_DIR
     results_dir.mkdir(exist_ok=True)
-    datetime_formatted = datetime.now().strftime(DATETIME_FORMAT)
     file_path = results_dir / "{}_{}.csv".format(
         cli_args.mode,
-        datetime_formatted
+        datetime.now().strftime(DATETIME_FORMAT)
     )
     with open(file_path, "w", encoding="utf-8") as f:
-        writer = csv.writer(f, dialect=csv.unix_dialect)
-        writer.writerows(results)
+        csv.writer(f, dialect=csv.unix_dialect).writerows(results)
     logging.info(OUTPUT_SAVED.format(file_path=file_path))
 
 
 OUTPUT_HANDLERS = {
-    "pretty": pretty_output,
-    "file": file_output,
+    OUTPUT_PRETTY: pretty_output,
+    OUTPUT_FILE: file_output,
     None: default_output,
 }
 
 
 def control_output(results, cli_args):
-    handler = OUTPUT_HANDLERS.get(cli_args.output)
-    handler(results, cli_args=cli_args)
+    OUTPUT_HANDLERS.get(cli_args.output)(results, cli_args=cli_args)

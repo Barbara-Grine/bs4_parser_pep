@@ -4,7 +4,6 @@ from collections import defaultdict
 from urllib.parse import urljoin
 
 import requests_cache
-from bs4 import BeautifulSoup
 from tqdm import tqdm
 
 from configs import configure_argument_parser, configure_logging
@@ -12,7 +11,7 @@ from constants import (BASE_DIR, DOWNLOADS_DIR, EXPECTED_STATUS, MAIN_DOC_URL,
                        PEP_URL)
 from exceptions import ParserFindTagException
 from outputs import control_output
-from utils import find_tag, get_response
+from utils import find_tag, get_soup
 
 ERROR_MESSAGE = (
     "\n Несовпадающие статусы: "
@@ -29,36 +28,26 @@ PARSER_END = "Парсер завершил работу."
 ERROR = "Ошибка при выполнении парсера: {error}"
 
 
-def get_soup(session, url, parser="lxml"):
-    if (response := get_response(session, url)) is None:
-        logging.warning(f"Не удалось получить URL: {url}")
-        return None
-    return BeautifulSoup(response.text, parser)
-
-
 def whats_new(session):
     whats_new_url = urljoin(MAIN_DOC_URL, "whatsnew/")
-    if (soup := get_soup(session, whats_new_url)) is None:
-        return []
-
+    soup = get_soup(session, whats_new_url)
     results = [("Ссылка на статью", "Заголовок", "Редактор, автор")]
     sections = soup.select(
-        "#what-s-new-in-python div.toctree-wrapper li.toctree-l1"
+        '#what-s-new-in-python div.toctree-wrapper > ul > li.toctree-l1 > a'
     )
 
-    for section in tqdm(sections, desc="Обработка whats-new"):
-        version_a_tag = section.find("a")
-        version_link = urljoin(whats_new_url, version_a_tag["href"])
-        if (soup_version := get_soup(session, version_link)) is None:
-            continue
-
+    for link in tqdm(sections, desc="Обработка нововведений"):
+        version_link = urljoin(whats_new_url, link['href'])
+        soup_version = get_soup(session, version_link)
+        dl_text = ""
         try:
-            dl_text = find_tag(soup_version, "dl").text.replace("\n", " ")
+            dl = find_tag(soup_version, 'dl')
+            dl_text = dl.text.replace('\n', ' ')
         except ParserFindTagException:
-            dl_text = ""
+            pass
 
         results.append(
-            (version_link, find_tag(soup_version, "h1").text, dl_text)
+            (version_link, find_tag(soup_version, 'h1').text, dl_text)
         )
 
     return results
@@ -112,9 +101,7 @@ def download(session):
 
 
 def pep(session):
-    if (soup := get_soup(session, PEP_URL)) is None:
-        return []
-
+    soup = get_soup(session, PEP_URL)
     section = find_tag(soup, "section", attrs={"id": "index-by-category"})
     if not (tables := section.find_all("table")):
         raise RuntimeError(
@@ -131,23 +118,28 @@ def pep(session):
 
             pep_card_tag = find_tag(pep_row, "a")
             pep_card_url = urljoin(
-                PEP_URL,
-                pep_card_tag["href"].rstrip("/") + "/"
+                PEP_URL, pep_card_tag["href"].rstrip("/") + "/"
             )
-            if (pep_soup := get_soup(session, pep_card_url)) is None:
+
+            try:
+                pep_soup = get_soup(session, pep_card_url)
+                pep_card_status = find_tag(pep_soup, "abbr").text.strip()
+
+                if pep_card_status not in expected_status:
+                    logs.append(ERROR_MESSAGE.format(
+                        pep_card_link=pep_card_url,
+                        pep_card_status=pep_card_status,
+                        expected_status=expected_status
+                    ))
+                temp_results[pep_card_status] += 1
+
+            except Exception as e:
+                logging.warning(
+                    f"Не удалось обработать {pep_card_url}: {str(e)}"
+                )
                 continue
 
-            pep_card_status = find_tag(pep_soup, "abbr").text.strip()
-            if pep_card_status not in expected_status:
-                logs.append(ERROR_MESSAGE.format(
-                    pep_card_link=pep_card_url,
-                    pep_card_status=pep_card_status,
-                    expected_status=expected_status
-                ))
-            temp_results[pep_card_status] += 1
-
-    for log_message in logs:
-        logging.warning(log_message)
+    list(map(logging.warning, logs))
 
     return [
         ("Статус", "Количество"),
@@ -182,8 +174,8 @@ def main():
 
     except Exception as e:
         logging.exception(ERROR.format(error=e))
-    finally:
-        logging.info(PARSER_END)
+
+    logging.info(PARSER_END)
 
 
 if __name__ == "__main__":
