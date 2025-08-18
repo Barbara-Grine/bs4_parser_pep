@@ -4,7 +4,6 @@ from collections import defaultdict
 from urllib.parse import urljoin
 
 import requests_cache
-from requests import RequestException
 
 from configs import configure_argument_parser, configure_logging
 from constants import (BASE_DIR, DOWNLOADS_DIR, EXPECTED_STATUS, MAIN_DOC_URL,
@@ -51,7 +50,7 @@ def whats_new(session):
             results.append(
                 (version_link, find_tag(soup_version, 'h1').text, dl_text)
             )
-        except (RequestException, ParserFindTagException) as exc:
+        except ParserFindTagException as exc:
             logs.append(WHATS_NEW_ERROR.format(url=version_link, exc=exc))
 
     list(map(logging.warning, logs))
@@ -135,7 +134,7 @@ def pep(session):
                     ))
                 temp_results[pep_card_status] += 1
 
-            except (RequestException, ParserFindTagException) as exc:
+            except ParserFindTagException as exc:
                 logs.append(PEP_PROCESS_ERROR.format(
                     pep_card_url=pep_card_url,
                     exc=exc,
