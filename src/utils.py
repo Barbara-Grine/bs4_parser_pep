@@ -30,5 +30,4 @@ def find_tag(soup, tag, attrs=None):
 
 
 def get_soup(session, url, parser="lxml"):
-    response = get_response(session, url)
-    return BeautifulSoup(response.text, parser)
+    return BeautifulSoup(get_response(session, url).text, parser)

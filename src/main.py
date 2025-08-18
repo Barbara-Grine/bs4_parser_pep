@@ -4,7 +4,7 @@ from collections import defaultdict
 from urllib.parse import urljoin
 
 import requests_cache
-from tqdm import tqdm
+from requests import RequestException
 
 from configs import configure_argument_parser, configure_logging
 from constants import (BASE_DIR, DOWNLOADS_DIR, EXPECTED_STATUS, MAIN_DOC_URL,
@@ -12,6 +12,7 @@ from constants import (BASE_DIR, DOWNLOADS_DIR, EXPECTED_STATUS, MAIN_DOC_URL,
 from exceptions import ParserFindTagException
 from outputs import control_output
 from utils import find_tag, get_soup
+
 
 ERROR_MESSAGE = (
     "\n Несовпадающие статусы: "
@@ -26,6 +27,9 @@ PARSER_START = "Парсер запущен!"
 ARGS = "Аргументы командной строки: {args}"
 PARSER_END = "Парсер завершил работу."
 ERROR = "Ошибка при выполнении парсера: {error}"
+WHATS_NEW_ERROR = "Не удалось обработать страницу нововведений {url}: {exc}"
+PEP_NO_TABLES = "Таблицы внутри секции 'index-by-category' не найдены"
+PEP_PROCESS_ERROR = "Не удалось обработать {pep_card_url}: {exc}"
 
 
 def whats_new(session):
@@ -36,27 +40,27 @@ def whats_new(session):
         '#what-s-new-in-python div.toctree-wrapper > ul > li.toctree-l1 > a'
     )
 
-    for link in tqdm(sections, desc="Обработка нововведений"):
+    logs = []
+
+    for link in sections:
         version_link = urljoin(whats_new_url, link['href'])
-        soup_version = get_soup(session, version_link)
-        dl_text = ""
         try:
+            soup_version = get_soup(session, version_link)
             dl = find_tag(soup_version, 'dl')
             dl_text = dl.text.replace('\n', ' ')
-        except ParserFindTagException:
-            pass
+            results.append(
+                (version_link, find_tag(soup_version, 'h1').text, dl_text)
+            )
+        except (RequestException, ParserFindTagException) as exc:
+            logs.append(WHATS_NEW_ERROR.format(url=version_link, exc=exc))
 
-        results.append(
-            (version_link, find_tag(soup_version, 'h1').text, dl_text)
-        )
+    list(map(logging.warning, logs))
 
     return results
 
 
 def latest_versions(session):
-    if (soup := get_soup(session, MAIN_DOC_URL)) is None:
-        return []
-
+    soup = get_soup(session, MAIN_DOC_URL)
     sidebar = find_tag(soup, "div", attrs={"class": "sphinxsidebarwrapper"})
     versions_ul = None
 
@@ -104,15 +108,13 @@ def pep(session):
     soup = get_soup(session, PEP_URL)
     section = find_tag(soup, "section", attrs={"id": "index-by-category"})
     if not (tables := section.find_all("table")):
-        raise RuntimeError(
-            "Таблицы внутри секции 'index-by-category' не найдены"
-        )
+        raise RuntimeError(PEP_NO_TABLES)
 
     temp_results = defaultdict(int)
     logs = []
 
     for table in tables:
-        for pep_row in tqdm(table.select("tbody tr"), desc="Обработка PEP"):
+        for pep_row in table.select("tbody tr"):
             preview_status = find_tag(pep_row, "abbr").text.strip()[1:]
             expected_status = EXPECTED_STATUS.get(preview_status, [])
 
@@ -133,11 +135,11 @@ def pep(session):
                     ))
                 temp_results[pep_card_status] += 1
 
-            except Exception as e:
-                logging.warning(
-                    f"Не удалось обработать {pep_card_url}: {str(e)}"
-                )
-                continue
+            except (RequestException, ParserFindTagException) as exc:
+                logs.append(PEP_PROCESS_ERROR.format(
+                    pep_card_url=pep_card_url,
+                    exc=exc,
+                ))
 
     list(map(logging.warning, logs))
 

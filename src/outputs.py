@@ -31,7 +31,12 @@ def file_output(results, cli_args, **kwargs):
         datetime.now().strftime(DATETIME_FORMAT)
     )
     with open(file_path, "w", encoding="utf-8") as f:
-        csv.writer(f, dialect=csv.unix_dialect).writerows(results)
+        csv.writer(
+            f,
+            dialect=csv.unix_dialect
+        ).writerows(
+            results
+        )
     logging.info(OUTPUT_SAVED.format(file_path=file_path))
 
 
