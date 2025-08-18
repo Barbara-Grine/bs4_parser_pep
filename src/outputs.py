@@ -1,21 +1,12 @@
 import csv
+import logging
 from datetime import datetime
 
 from prettytable import PrettyTable
 
-from constants import BASE_DIR, DATETIME_FORMAT
+from constants import BASE_DIR, DATETIME_FORMAT, RESULTS_DIR
 
-
-OUTPUT_SAVED_MSG = "Файл с результатами был сохранён: {file_path}"
-
-
-def control_output(results, cli_args):
-    output_handlers = {
-        "pretty": pretty_output,
-        "file": file_output,
-    }
-    handler = output_handlers.get(cli_args.output, default_output)
-    handler(results, cli_args=cli_args)
+OUTPUT_SAVED = "Файл с результатами был сохранён: {file_path}"
 
 
 def default_output(results, **kwargs):
@@ -32,12 +23,26 @@ def pretty_output(results, **kwargs):
 
 
 def file_output(results, cli_args, **kwargs):
-    RESULTS_DIR = BASE_DIR / "results"
-    RESULTS_DIR.mkdir(exist_ok=True)
-    file_path = RESULTS_DIR / (
-        f"{cli_args.mode}_{datetime.now().strftime(DATETIME_FORMAT)}.csv"
+    results_dir = BASE_DIR / RESULTS_DIR
+    results_dir.mkdir(exist_ok=True)
+    datetime_formatted = datetime.now().strftime(DATETIME_FORMAT)
+    file_path = results_dir / "{}_{}.csv".format(
+        cli_args.mode,
+        datetime_formatted
     )
     with open(file_path, "w", encoding="utf-8") as f:
         writer = csv.writer(f, dialect=csv.unix_dialect)
         writer.writerows(results)
-    print(OUTPUT_SAVED_MSG.format(file_path=file_path))
+    logging.info(OUTPUT_SAVED.format(file_path=file_path))
+
+
+OUTPUT_HANDLERS = {
+    "pretty": pretty_output,
+    "file": file_output,
+    None: default_output,
+}
+
+
+def control_output(results, cli_args):
+    handler = OUTPUT_HANDLERS.get(cli_args.output)
+    handler(results, cli_args=cli_args)
