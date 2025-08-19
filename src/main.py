@@ -50,7 +50,7 @@ def whats_new(session):
             results.append(
                 (version_link, find_tag(soup_version, 'h1').text, dl_text)
             )
-        except ParserFindTagException as exc:
+        except (ParserFindTagException, ConnectionError) as exc:
             logs.append(WHATS_NEW_ERROR.format(url=version_link, exc=exc))
 
     list(map(logging.warning, logs))
@@ -134,7 +134,7 @@ def pep(session):
                     ))
                 temp_results[pep_card_status] += 1
 
-            except ParserFindTagException as exc:
+            except (ParserFindTagException, ConnectionError) as exc:
                 logs.append(PEP_PROCESS_ERROR.format(
                     pep_card_url=pep_card_url,
                     exc=exc,
